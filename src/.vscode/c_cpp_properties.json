@@ -9,7 +9,9 @@
                 "${env.HOME}/arm-cross-comp-env/arm-raspbian-linux-gnueabi/arm-raspbian-linux-gnueabi/sysroot/lib/modules/4.19.50-rt22/source/arch/arm/include/generated/",
                 "${env.HOME}/arm-cross-comp-env/arm-raspbian-linux-gnueabi/arm-raspbian-linux-gnueabi/sysroot/usr/lib/gcc/arm-linux-gnueabihf/8/include/"
             ],
-            "defines": ["__ARM_PCS_VFP"],
+            "defines": [
+                "__ARM_PCS_VFP"
+            ],
             "intelliSenseMode": "clang-x64",
             "browse": {
                 "path": [
@@ -17,8 +19,9 @@
                 ],
                 "limitSymbolsToIncludedHeaders": true,
                 "databaseFilename": ""
-            }
+            },
+            "configurationProvider": "ms-vscode.makefile-tools"
         }
     ],
-    "version": 3
+    "version": 4
 }

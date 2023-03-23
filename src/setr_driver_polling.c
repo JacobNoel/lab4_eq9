@@ -120,7 +120,23 @@ static int pollClavier(void *arg){
       // 3) Selon ces valeurs et le contenu de dernierEtat, déterminer si une nouvelle touche a été pressée
       // 4) Mettre à jour le buffer et dernierEtat en vous assurant d'éviter les race conditions avec le reste du module
 
-
+      //Boucle sur chaque ligne de pattern qui correspond à un patron de balayage
+      for (ligneIdx=0;ligneIdx<4;ligneIdx++){
+        //Assigne la valeur de pattern au GPIO (1 ou 0)
+        for (patternIdx=0;patternIdx<4;patternIdx++){
+          gpio_set_value(gpiosEcrire[patternIdx], patterns[ligneIdx][patternIdx]); //comment acceder au nom du gpio ?
+        }
+        for (colIdx=0;colIdx<4;colIdx++){
+          //Lit la valeur de la touche (i,j)
+          val = gpio_get_value(gpiosLire[colIdx]); //comment acceder au nom du gpio ?
+          if (dernierEtat[ligneIdx][colIdx]!=val){ 
+            //Si valeur a changé on enregistre l'etat
+            dernierEtat[ligneIdx][colIdx]=val;
+            //On écrit la valeur du clavier dans le buffer
+            data[posCouranteEcriture]=valeursClavier[ligneIdx][colIdx];
+          }
+        }
+      }
       set_current_state(TASK_INTERRUPTIBLE); // On indique qu'on peut ere interrompu
       msleep(pausePollingMs);                // On se met en pause un certain temps
     }
@@ -166,6 +182,40 @@ static int __init setrclavier_init(void){
     //
     // Vous devez également initialiser le mutex de synchronisation.
 
+    //Est-ce qu'il faut check que le gpio est valide???
+    
+
+    //Request des GPIO écriture + direction
+    for ( i = 0 ; i < 4 ; i++){
+      if (gpio_request(gpiosEcrire[i],gpiosEcrireNoms[i])<0) {
+        printk("output GPIO request failed\n");
+      }
+      else if (gpio_direction_output(gpiosEcrire[i],0)<0) {
+        printk("output GPIO direction failed\n");
+      }
+      else {
+        printk("output GPIO request + direction success\n");
+        if (gpio_set_debounce(gpiosEcrire[i],dureeDebounce)<0){
+          printk("set gpio debounce time failed\n");
+        };
+      }
+    }
+    //Request des GPIO lecture + direction
+    for(i=0;i<4;i++){
+      if (gpio_request(gpiosLire[i],gpiosLireNoms[i])<0){
+        printk("output GPIO request failed\n");
+      }
+      else if (gpio_direction_output(gpiosLire[i],0)<0){
+        printk("output GPIO direction failed\n");
+      }
+      
+      else {
+        printk("output GPIO request + direction success\n");
+      }
+    }
+
+    //Initialisation du mutex --- c'est tout???
+    mutex_init(&sync);
 
 
     // Le mutex devrait avoir été initialisé avant d'appeler la ligne suivante!
@@ -186,6 +236,13 @@ static void __exit setrclavier_exit(void){
     // TODO
     // Écrivez le code permettant de relâcher (libérer) les GPIO
     // Vous aurez pour cela besoin de la fonction gpio_free
+
+    for (i=0;i<4;i++) {
+      gpio_set_value(gpiosEcrire[i],0);
+      gpio_free(gpiosEcrire[i]);
+      gpio_free(gpiosLire[i]);
+    }
+
 
     // On retire correctement les différentes composantes du pilote
     device_destroy(setrClasse, MKDEV(majorNumber, 0));
@@ -223,7 +280,34 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
     // revienne alors à 0. Il est donc tout à fait possible que posCouranteEcriture soit INFÉRIEUR à
     // posCouranteLecture, et vous devez gérer ce cas sans perdre de caractères et en respectant les
     // autres conditions (par exemple, ne jamais copier plus que len caractères).
+    int c;
 
+    //est-ce qu'il faut vérifier poscouranteEcriture >= posCouranteLecture?
+
+    mutex_lock(&sync);
+
+    if ((TAILLE_BUFFER-posCouranteEcriture)>len){
+      //Copie ok avant fin buffer
+      c = copy_to_user(buffer, filep+offset, len);
+      if (c > 0) {
+        printk("Not all bytes copied, left = %d\n",c);
+      }
+      posCouranteEcriture+=len;
+    }
+    else if (posCouranteLecture > (len-(TAILLE_BUFFER-posCouranteEcriture))) { //verif que la lecture a bien dépassé ce qu'on va effacer en repartant au début du buffer
+      //Copie jusqu'à la fin du buffer puis retour au début
+      c = copy_to_user(buffer, filep+offset, len);
+      if (c > 0) {
+        printk("Not all bytes copied, left = %d\n",c);
+        posCouranteEcriture = len-(TAILLE_BUFFER-posCouranteEcriture);
+      }
+    }
+
+    mutex_unlock(&sync);
+
+
+
+  return 0;
 }
 
 // On enregistre les fonctions d'initialisation et de destruction

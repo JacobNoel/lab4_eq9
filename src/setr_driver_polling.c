@@ -69,10 +69,10 @@ static struct task_struct *task;            // Réfère au thread noyau
 // 4 GPIO doivent être assignés pour l'écriture, et 4 en lecture (voir énoncé)
 // Nous vous proposons les choix suivants, mais ce n'est pas obligatoire
 static int  gpiosEcrire[] = {5, 6, 13, 19};             // Correspond aux pins 29, 31, 33 et 35
-static int  gpiosLire[] = {12, 16, 20, 21};             // Correspond aux pins 32, 36, 38, et 40
+static int  gpiosLire[] = {12, 16, 20};             // Correspond aux pins 32, 36, 38, et 40
 // Les noms des différents GPIO
 static char* gpiosEcrireNoms[] = {"OUT1", "OUT2", "OUT3", "OUT4"};
-static char* gpiosLireNoms[] = {"IN1", "IN2", "IN3", "IN4"};
+static char* gpiosLireNoms[] = {"IN1", "IN2", "IN3"};
 
 // Les patrons de balayage (une seule ligne doit être active à la fois)
 static int   patterns[4][4] = {
@@ -83,16 +83,16 @@ static int   patterns[4][4] = {
 };
 
 // Les valeurs du clavier, selon la ligne et la colonne actives
-static char valeursClavier[4][4] = {
-    {'1', '2', '3', 'A'},
-    {'4', '5', '6', 'B'},
-    {'7', '8', '9', 'C'},
-    {'*', '0', '#', 'D'}
+static char valeursClavier[4][3] = {
+    {'1', '2', '3'},
+    {'4', '5', '6'},
+    {'7', '8', '9'},
+    {'*', '0', '#'}
 };
 
 // Permet de se souvenir du dernier état du clavier,
 // pour ne pas répéter une touche qui était déjà enfoncée.
-static int dernierEtat[4][4] = {0};
+static int dernierEtat[4][3] = {0};
 
 
 
@@ -121,23 +121,33 @@ static int pollClavier(void *arg){
       // 4) Mettre à jour le buffer et dernierEtat en vous assurant d'éviter les race conditions avec le reste du module
 
       //Boucle sur chaque ligne de pattern qui correspond à un patron de balayage
-      for (ligneIdx=0;ligneIdx<4;ligneIdx++){
+      for (patternIdx=0;patternIdx<4;patternIdx++){
         //Assigne la valeur de pattern au GPIO (1 ou 0)
-        for (patternIdx=0;patternIdx<4;patternIdx++){
-          gpio_set_value(gpiosEcrire[patternIdx], patterns[ligneIdx][patternIdx]); //comment acceder au nom du gpio ?
+        //printk(KERN_INFO "applique le pattern: %d\n",patternIdx);
+
+        for (ligneIdx=0;ligneIdx<4;ligneIdx++){
+          //printk(KERN_INFO "valeur %d a la ligne %d\n",patterns[patternIdx][ligneIdx], ligneIdx);
+          gpio_set_value(gpiosEcrire[ligneIdx], patterns[patternIdx][ligneIdx]);
         }
-        for (colIdx=0;colIdx<4;colIdx++){
+
+        for (colIdx=0;colIdx<3;colIdx++){
           //Lit la valeur de la touche (i,j)
-          val = gpio_get_value(gpiosLire[colIdx]); //comment acceder au nom du gpio ?
-          if (dernierEtat[ligneIdx][colIdx]!=val){ 
+          val = gpio_get_value(gpiosLire[colIdx]);
+          //if(val !=0) 
+            //printk(KERN_INFO "%d %d %d", patternIdx, colIdx, val);
+
+          if (dernierEtat[patternIdx][colIdx]!=val){ 
             //Si valeur a changé on enregistre l'etat
-            dernierEtat[ligneIdx][colIdx]=val;
-            //On écrit la valeur du clavier dans le buffer
-            data[posCouranteEcriture]=valeursClavier[ligneIdx][colIdx];
+            dernierEtat[patternIdx][colIdx]=val;
+            if (val == 1) {
+              //On écrit la valeur du clavier dans le buffer
+              data[posCouranteEcriture]=valeursClavier[patternIdx][colIdx];
+              printk(KERN_INFO "ecriture valeur %c\n",data[posCouranteEcriture]);
+            }
           }
         }
       }
-      set_current_state(TASK_INTERRUPTIBLE); // On indique qu'on peut ere interrompu
+      set_current_state(TASK_INTERRUPTIBLE); // On indique qu'on peut etre interrompu
       msleep(pausePollingMs);                // On se met en pause un certain temps
     }
     printk(KERN_INFO "SETR_CLAVIER : Poll clavier stop! \n");
@@ -201,11 +211,11 @@ static int __init setrclavier_init(void){
       }
     }
     //Request des GPIO lecture + direction
-    for(i=0;i<4;i++){
+    for(i=0;i<3;i++){
       if (gpio_request(gpiosLire[i],gpiosLireNoms[i])<0){
         printk("output GPIO request failed\n");
       }
-      else if (gpio_direction_output(gpiosLire[i],0)<0){
+      else if (gpio_direction_input(gpiosLire[i])<0){
         printk("output GPIO direction failed\n");
       }
       
@@ -240,6 +250,8 @@ static void __exit setrclavier_exit(void){
     for (i=0;i<4;i++) {
       gpio_set_value(gpiosEcrire[i],0);
       gpio_free(gpiosEcrire[i]);
+    }
+    for (i=0;i<3;i++) {
       gpio_free(gpiosLire[i]);
     }
 
@@ -281,26 +293,41 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
     // posCouranteLecture, et vous devez gérer ce cas sans perdre de caractères et en respectant les
     // autres conditions (par exemple, ne jamais copier plus que len caractères).
     int c;
-
+    
     //est-ce qu'il faut vérifier poscouranteEcriture >= posCouranteLecture?
 
-    mutex_lock(&sync);
+    //TODO
+    //Mettre decalage a data (difference entre posCouranteEcriture et posCouranteLecture)
+    //Attention a pas copier longueur len. len c'est le max qu'on peut copier mais nous on prend que ce qui est dispo 
+    // de plus depuis la derniere fois (difference entre posCouranteEcriture et posCouranteLecture)
+    //du coup on copie le min entre len et ce qui est dispo
 
+
+
+    mutex_lock(&sync);
+    printk(KERN_INFO "taille buffer %d",TAILLE_BUFFER);
+    printk(KERN_INFO "position ecriture %d",posCouranteEcriture);
     if ((TAILLE_BUFFER-posCouranteEcriture)>len){
       //Copie ok avant fin buffer
-      c = copy_to_user(buffer, filep+offset, len);
+      c = copy_to_user(buffer, data, len);
       if (c > 0) {
         printk("Not all bytes copied, left = %d\n",c);
+      }
+      else{
+        printk(KERN_INFO "copie reussie\n");
       }
       posCouranteEcriture+=len;
     }
     else if (posCouranteLecture > (len-(TAILLE_BUFFER-posCouranteEcriture))) { //verif que la lecture a bien dépassé ce qu'on va effacer en repartant au début du buffer
       //Copie jusqu'à la fin du buffer puis retour au début
-      c = copy_to_user(buffer, filep+offset, len);
+      c = copy_to_user(buffer, data, len);
       if (c > 0) {
         printk("Not all bytes copied, left = %d\n",c);
-        posCouranteEcriture = len-(TAILLE_BUFFER-posCouranteEcriture);
       }
+      else{
+        printk(KERN_INFO "copie reussie\n");
+      }
+      posCouranteEcriture = len-(TAILLE_BUFFER-posCouranteEcriture);
     }
 
     mutex_unlock(&sync);

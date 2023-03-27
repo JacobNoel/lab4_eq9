@@ -136,13 +136,20 @@ static int pollClavier(void *arg){
           //if(val !=0) 
             //printk(KERN_INFO "%d %d %d", patternIdx, colIdx, val);
 
-          if (dernierEtat[patternIdx][colIdx]!=val){ 
+          if (dernierEtat[patternIdx][colIdx]!=val){
             //Si valeur a changé on enregistre l'etat
             dernierEtat[patternIdx][colIdx]=val;
             if (val == 1) {
               //On écrit la valeur du clavier dans le buffer
               data[posCouranteEcriture]=valeursClavier[patternIdx][colIdx];
+              //printk(KERN_INFO "pos Ecriture avant: %d\n",posCouranteEcriture);
               printk(KERN_INFO "ecriture valeur %c\n",data[posCouranteEcriture]);
+              if (posCouranteEcriture<TAILLE_BUFFER){
+                posCouranteEcriture+=1;
+              }
+              else
+                posCouranteEcriture=0;
+              //printk(KERN_INFO "pos Ecriture apres: %d\n",posCouranteEcriture);
             }
           }
         }
@@ -156,7 +163,7 @@ static int pollClavier(void *arg){
 
 
 static int __init setrclavier_init(void){
-    int i, ok;
+    int i;
     printk(KERN_INFO "SETR_CLAVIER : Initialisation du driver commencee\n");
 
     // On enregistre notre pilote
@@ -293,7 +300,9 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
     // posCouranteLecture, et vous devez gérer ce cas sans perdre de caractères et en respectant les
     // autres conditions (par exemple, ne jamais copier plus que len caractères).
     int c;
-    
+    int i=0;
+    int nbr_a_copier=0;
+
     //est-ce qu'il faut vérifier poscouranteEcriture >= posCouranteLecture?
 
     //TODO
@@ -305,31 +314,53 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 
 
     mutex_lock(&sync);
-    printk(KERN_INFO "taille buffer %d",TAILLE_BUFFER);
-    printk(KERN_INFO "position ecriture %d",posCouranteEcriture);
-    if ((TAILLE_BUFFER-posCouranteEcriture)>len){
-      //Copie ok avant fin buffer
-      c = copy_to_user(buffer, data, len);
-      if (c > 0) {
-        printk("Not all bytes copied, left = %d\n",c);
+    //printk(KERN_INFO "taille buffer %d",TAILLE_BUFFER);
+    //printk(KERN_INFO "position ecriture %d",posCouranteEcriture);
+    //printk(KERN_INFO "position lecture:%d\n",posCouranteLecture);
+
+    if (posCouranteEcriture  > posCouranteLecture){
+      //Cas 1 : on a pas rebouclé sur le début du buffer
+      nbr_a_copier = posCouranteEcriture-posCouranteLecture;
+      //On copie les données si il y en a pas trop
+      if ((nbr_a_copier<len) && (nbr_a_copier<(TAILLE_BUFFER-posCouranteEcriture+posCouranteLecture))){
+        c = copy_to_user(buffer, data+posCouranteEcriture, nbr_a_copier);
+        //Verif de la réussite de la copie
+        if (c > 0) {
+          printk(KERN_INFO "Not all bytes copied, left = %d\n",c);
+          posCouranteLecture+=nbr_a_copier-c;
+        }
+        else{
+          //printk(KERN_INFO "copie reussie\n");
+          posCouranteLecture+=nbr_a_copier;
+        }
       }
-      else{
-        printk(KERN_INFO "copie reussie\n");
-      }
-      posCouranteEcriture+=len;
-    }
-    else if (posCouranteLecture > (len-(TAILLE_BUFFER-posCouranteEcriture))) { //verif que la lecture a bien dépassé ce qu'on va effacer en repartant au début du buffer
-      //Copie jusqu'à la fin du buffer puis retour au début
-      c = copy_to_user(buffer, data, len);
-      if (c > 0) {
-        printk("Not all bytes copied, left = %d\n",c);
-      }
-      else{
-        printk(KERN_INFO "copie reussie\n");
-      }
-      posCouranteEcriture = len-(TAILLE_BUFFER-posCouranteEcriture);
+      else
+        printk(KERN_INFO "quantité à copier dépasse len\n");
     }
 
+
+    else if (posCouranteEcriture<posCouranteLecture){
+      //Cas 2 : on a commencé à réécrire au début du buffer
+      nbr_a_copier = TAILLE_BUFFER-posCouranteLecture+posCouranteEcriture;
+      //On copie les données si il y en a pas trop
+      if ((nbr_a_copier<len) && (nbr_a_copier<(posCouranteLecture-posCouranteEcriture))){
+        c = copy_to_user(buffer, data+posCouranteEcriture, nbr_a_copier);
+        //Verif de la réussite de la copie
+        if (c > 0) {
+          printk(KERN_INFO "Not all bytes copied, left = %d\n",c);
+          posCouranteLecture+=nbr_a_copier-c;
+        }
+        else{
+          //printk(KERN_INFO "copie reussie\n");
+          posCouranteLecture+=nbr_a_copier;
+        }
+      }
+      else
+        printk(KERN_INFO "quantité à copier dépasse len\n");
+    }
+    
+    
+    
     mutex_unlock(&sync);
 
 

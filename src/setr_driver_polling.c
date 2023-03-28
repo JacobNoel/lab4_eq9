@@ -314,16 +314,17 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
 
 
     mutex_lock(&sync);
-    //printk(KERN_INFO "taille buffer %d",TAILLE_BUFFER);
-    //printk(KERN_INFO "position ecriture %d",posCouranteEcriture);
-    //printk(KERN_INFO "position lecture:%d\n",posCouranteLecture);
-
+    //printk(KERN_INFO "Contenu buffer : [0]=%hhu [1]=%hhu [2]=%hhu, [3]=%hhu, [4]=%hhu, [5]=%hhu, [6]=%hhu, [7]=%hhu \n", data[0], data[1], data[2], data[3], data[4],data[5], data[6], data[7]);
+    //printk(KERN_INFO "nbr_a_copier=%d, posEcriture=%u, posLecture=%u, len=%u\n", nbr_a_copier, posCouranteEcriture, posCouranteLecture, len);
     if (posCouranteEcriture  > posCouranteLecture){
       //Cas 1 : on a pas rebouclé sur le début du buffer
       nbr_a_copier = posCouranteEcriture-posCouranteLecture;
       //On copie les données si il y en a pas trop
       if ((nbr_a_copier<len) && (nbr_a_copier<(TAILLE_BUFFER-posCouranteEcriture+posCouranteLecture))){
-        c = copy_to_user(buffer, data+posCouranteEcriture, nbr_a_copier);
+        //if(nbr_a_copier > 0)
+          //printk(KERN_INFO "nbr_a_copier=%u, data[%u]=%hhu", nbr_a_copier, posCouranteLecture, data[posCouranteLecture]);
+        
+        c = copy_to_user(buffer, data+posCouranteLecture, nbr_a_copier);
         //Verif de la réussite de la copie
         if (c > 0) {
           printk(KERN_INFO "Not all bytes copied, left = %d\n",c);
@@ -337,14 +338,13 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
       else
         printk(KERN_INFO "quantité à copier dépasse len\n");
     }
-
 
     else if (posCouranteEcriture<posCouranteLecture){
       //Cas 2 : on a commencé à réécrire au début du buffer
       nbr_a_copier = TAILLE_BUFFER-posCouranteLecture+posCouranteEcriture;
       //On copie les données si il y en a pas trop
       if ((nbr_a_copier<len) && (nbr_a_copier<(posCouranteLecture-posCouranteEcriture))){
-        c = copy_to_user(buffer, data+posCouranteEcriture, nbr_a_copier);
+        c = copy_to_user(buffer, data+posCouranteLecture, nbr_a_copier);
         //Verif de la réussite de la copie
         if (c > 0) {
           printk(KERN_INFO "Not all bytes copied, left = %d\n",c);
@@ -358,14 +358,8 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
       else
         printk(KERN_INFO "quantité à copier dépasse len\n");
     }
-    
-    
-    
     mutex_unlock(&sync);
-
-
-
-  return 0;
+  return nbr_a_copier;
 }
 
 // On enregistre les fonctions d'initialisation et de destruction

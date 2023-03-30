@@ -3,7 +3,7 @@ set -e
 
 # Sync executable
 bn=$(basename $1)
-rpiaddr="ADRESSE-DE-VOTRE-RASPBERRY-PI-ICI"
+rpiaddr="10.0.1.20"
 
 rsync -az $1/*.ko "pi@$rpiaddr:/home/pi/projects/laboratoire4/"
 

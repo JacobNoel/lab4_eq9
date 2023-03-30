@@ -300,7 +300,7 @@ static ssize_t dev_read(struct file *filep, char *buffer, size_t len, loff_t *of
     // posCouranteLecture, et vous devez gérer ce cas sans perdre de caractères et en respectant les
     // autres conditions (par exemple, ne jamais copier plus que len caractères).
     int c;
-    int i=0;
+    //int i=0;
     int nbr_a_copier=0;
 
     //est-ce qu'il faut vérifier poscouranteEcriture >= posCouranteLecture?

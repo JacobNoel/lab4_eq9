@@ -297,6 +297,7 @@ static int __init setrclavier_init(void){
     //
     // Vous devez également initialiser le mutex de synchronisation.
 
+<<<<<<< HEAD
     // Initialisation des GPIOs
     for (i = 0; i < sizeof(gpiosEcrire); i++) {
         // On enregistre chaque GPIO utilisé
@@ -400,10 +401,22 @@ static int __init setrclavier_init(void){
 
 
     printk(KERN_INFO "SETR_CLAVIER : Fin de l'Initialisation!\n"); // Made it! device was initialized
+=======
+    /*ok = request_irq(irqno,                 // Le numéro de l'interruption, obtenue avec gpio_to_irq
+         (irq_handler_t) setr_irq_handler,  // Pointeur vers la routine de traitement de l'interruption
+         IRQF_TRIGGER_RISING,               // On veut une interruption sur le front montant (lorsque le bouton est pressé)
+         "setr_irq_handler",                // Le nom de notre interruption
+         NULL);                             // Paramètre supplémentaire inutile pour vous
+    if(ok != 0)
+        printk(KERN_ALERT "Erreur (%d) lors de l'enregistrement IRQ #{%d}!\n", ok, irqno);
+
+
+        printk(KERN_INFO "SETR_CLAVIER : Fin de l'Initialisation!\n"); // Made it! device was initialized*/
+>>>>>>> 173453286c65fb1dbe9591c9876c2e7729996c8d
 
     return 0;
 }
-
+ 
 
 static void __exit setrclavier_exit(void){
     int i;
